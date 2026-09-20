@@ -6,12 +6,14 @@ from pydantic import BaseModel, Field
 
 from autopitch.llm import LLMClient
 from autopitch.retrieval.benchmark import Benchmark
+from autopitch.safety import notice, wrap_untrusted
 from autopitch.schema import Deck, Section, SectionScore
 
 WEAK_THRESHOLD = 5.0
 _MAX_OBJECTIONS = 6
 
-_SYSTEM = """You are a partner at a venture fund that invests in the company's sector.
+_SYSTEM = f"""You are a partner at a venture fund that invests in the company's sector.
+{notice("analysis")}
 You have just read this pitch deck and the analysis below. List the objections you would most
 likely raise in the partner meeting.
 - Ground every objection in the provided scores, missing data or benchmark findings.
@@ -59,5 +61,6 @@ def _prompt(deck: Deck, scores: list[SectionScore], benchmark: Benchmark | None)
 def generate_objections(
     deck: Deck, scores: list[SectionScore], benchmark: Benchmark | None, llm: LLMClient
 ) -> list[Objection]:
-    result = llm.generate_structured(_SYSTEM, _prompt(deck, scores, benchmark), _Objections)
+    prompt = wrap_untrusted("analysis", _prompt(deck, scores, benchmark))
+    result = llm.generate_structured(_SYSTEM, prompt, _Objections)
     return result.objections[:_MAX_OBJECTIONS]

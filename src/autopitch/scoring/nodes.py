@@ -10,10 +10,12 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from autopitch.llm import LLMClient
+from autopitch.safety import notice, wrap_untrusted
 from autopitch.schema import CriterionScore, Deck, Section, SectionScore
 from autopitch.scoring.rubric import CRITERIA
 
-_SYSTEM = """You are a seed-stage venture investor scoring one section of a pitch deck.
+_SYSTEM = f"""You are a seed-stage venture investor scoring one section of a pitch deck.
+{notice("section_data")}
 Score each listed criterion from 0 to 10 using only the extracted data provided.
 - 0-2: absent or actively concerning. 3-4: weak. 5-6: acceptable. 7-8: strong. 9-10: exceptional.
 - If the data needed for a criterion is missing, score it low and name what is missing in
@@ -35,7 +37,7 @@ def _prompt(deck: Deck, section: Section) -> str:
         f"Company: {deck.company}\nSector: {deck.sector}\nStage: {deck.stage or 'unknown'}\n"
         f"One-liner: {deck.one_liner or 'n/a'}\n\n"
         f"Section under review: {section.value}\n\nCriteria:\n{criteria}\n\n"
-        f"Extracted section data:\n{data}"
+        f"Extracted section data:\n{wrap_untrusted('section_data', data)}"
     )
 
 
