@@ -11,7 +11,7 @@ from autopitch.ratelimit import RateLimiter
 from autopitch.schema import CriterionScore, Deck, Section
 from autopitch.scoring import CRITERIA
 from autopitch.scoring.nodes import _SectionJudgement
-from tests.conftest import make_pdf
+from autopitch.testing import make_pdf
 
 
 def _graph(sample_deck):

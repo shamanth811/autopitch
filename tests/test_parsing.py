@@ -3,7 +3,7 @@ import pytest
 from autopitch.llm.fake import FakeLLM
 from autopitch.parsing import DeckParseError, parse_pdf, read_slides
 from autopitch.schema import Deck
-from tests.conftest import make_pdf
+from autopitch.testing import make_pdf
 
 
 def test_read_slides_returns_one_slide_per_page():

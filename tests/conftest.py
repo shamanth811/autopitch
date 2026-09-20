@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import io
-
 import pytest
-from pypdf import PdfWriter
-from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from autopitch.schema import (
     Deck,
@@ -16,31 +12,6 @@ from autopitch.schema import (
     TeamSection,
     TractionSection,
 )
-
-
-def make_pdf(pages: list[str]) -> bytes:
-    """Build a small text PDF with no external tooling."""
-    writer = PdfWriter()
-    font = DictionaryObject(
-        {
-            NameObject("/Type"): NameObject("/Font"),
-            NameObject("/Subtype"): NameObject("/Type1"),
-            NameObject("/BaseFont"): NameObject("/Helvetica"),
-        }
-    )
-    font_ref = writer._add_object(font)
-    for text in pages:
-        page = writer.add_blank_page(width=612, height=792)
-        safe = text.replace("(", "[").replace(")", "]")
-        stream = DecodedStreamObject()
-        stream.set_data(f"BT /F1 14 Tf 50 700 Td ({safe}) Tj ET".encode())
-        page[NameObject("/Contents")] = writer._add_object(stream)
-        page[NameObject("/Resources")] = DictionaryObject(
-            {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font_ref})}
-        )
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
 
 
 @pytest.fixture
