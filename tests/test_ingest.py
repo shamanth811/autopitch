@@ -75,7 +75,10 @@ def _llm():
 def test_extract_patterns_builds_stable_ids_and_lowercases_sector():
     patterns = extract_patterns(REF, FILING, _llm())
     assert len(patterns) == 1
-    assert patterns[0].id == "0001193125-21-000001-voltly-inc-0"
+    # Keyed on the round, not the filing, so an amendment restating it overwrites.
+    assert patterns[0].id == "voltly-inc-series-a-8000000-2018"
+    amended = REF.model_copy(update={"accession": "0001193125-21-000099"})
+    assert extract_patterns(amended, FILING, _llm())[0].id == patterns[0].id
     assert patterns[0].sector == "climate"
     assert patterns[0].source_url == REF.url
 
@@ -90,3 +93,39 @@ def test_ingest_stores_patterns_and_skips_filings_without_section():
     n = ingest_filings([REF, other], StubEdgar(), _llm(), HashEmbedder(), store)
     assert n == 1
     assert len(store.query(HashEmbedder().embed_query("climate"), top_k=10)) == 1
+
+
+def test_excerpt_found_from_alternative_headings():
+    assert find_financing_excerpt("intro\nPreferred Stock Financing\nIn 2019 we sold 1,000 shares")
+    assert find_financing_excerpt("x\nUnregistered Sales of Equity Securities\nIn 2019 we sold")
+
+
+def test_edgar_retries_server_errors_then_succeeds():
+    import httpx
+
+    from autopitch.retrieval.edgar import EdgarClient
+
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(500) if len(calls) < 3 else httpx.Response(200, json={"ok": 1})
+
+    edgar = EdgarClient("Test User test@example.com")
+    edgar._http = httpx.Client(transport=httpx.MockTransport(handler))
+    edgar._sleep = lambda _: None
+    assert edgar._get("https://efts.sec.gov/x").json() == {"ok": 1}
+    assert len(calls) == 3
+
+
+def test_edgar_gives_up_after_repeated_server_errors():
+    import httpx
+    import pytest
+
+    from autopitch.retrieval.edgar import EdgarClient
+
+    edgar = EdgarClient("Test User test@example.com")
+    edgar._http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
+    edgar._sleep = lambda _: None
+    with pytest.raises(httpx.HTTPStatusError):
+        edgar._get("https://efts.sec.gov/x")

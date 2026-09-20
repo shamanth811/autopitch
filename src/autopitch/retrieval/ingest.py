@@ -18,8 +18,11 @@ log = logging.getLogger(__name__)
 
 _SECTION_MARKERS = (
     "recent sales of unregistered securities",
+    "unregistered sales of equity securities",
     "convertible preferred stock financing",
     "preferred stock financings",
+    "preferred stock financing",
+    "series a preferred stock financing",
 )
 _EXCERPT_CHARS = 30_000
 
@@ -48,7 +51,7 @@ class _ExtractedRounds(BaseModel):
     rounds: list[_ExtractedRound] = Field(default_factory=list)
 
 
-def find_financing_excerpt(text: str) -> str | None:
+def find_financing_excerpt(text: str, max_chars: int = _EXCERPT_CHARS) -> str | None:
     """Locate the financing disclosure. Uses the last marker hit, because earlier hits are
     usually the table of contents or a cross-reference."""
     lowered = text.lower()
@@ -57,19 +60,24 @@ def find_financing_excerpt(text: str) -> str | None:
         best = max(best, lowered.rfind(marker))
     if best < 0:
         return None
-    return text[best : best + _EXCERPT_CHARS]
+    return text[best : best + max_chars]
 
 
-def extract_patterns(ref: FilingRef, text: str, llm: LLMClient) -> list[FundingPattern]:
-    excerpt = find_financing_excerpt(text)
+def extract_patterns(
+    ref: FilingRef, text: str, llm: LLMClient, excerpt_chars: int = _EXCERPT_CHARS
+) -> list[FundingPattern]:
+    excerpt = find_financing_excerpt(text, excerpt_chars)
     if excerpt is None:
         return []
     prompt = f"Company: {ref.company}\nFiling: {ref.form} filed {ref.filed}\n\n{excerpt}"
     extracted = llm.generate_structured(_SYSTEM, prompt, _ExtractedRounds)
     slug = re.sub(r"[^a-z0-9]+", "-", ref.company.lower()).strip("-")
-    return [
-        FundingPattern(
-            id=f"{ref.accession}-{slug}-{i}",
+    patterns = {}
+    for r in extracted.rounds:
+        # Deterministic id: amendments restating the same round overwrite instead of duplicating.
+        pid = f"{slug}-{r.stage or 'na'}-{int(r.round_amount_usd or 0)}-{r.year or 'na'}"
+        patterns[pid] = FundingPattern(
+            id=pid,
             company=ref.company,
             sector=extracted.sector.lower(),
             stage=r.stage,
@@ -79,8 +87,7 @@ def extract_patterns(ref: FilingRef, text: str, llm: LLMClient) -> list[FundingP
             summary=r.summary,
             source_url=ref.url,
         )
-        for i, r in enumerate(extracted.rounds)
-    ]
+    return list(patterns.values())
 
 
 def ingest_filings(
@@ -89,20 +96,26 @@ def ingest_filings(
     llm: LLMClient,
     embedder: Embedder,
     store: VectorStore,
+    excerpt_chars: int = _EXCERPT_CHARS,
 ) -> int:
     """Ingest each filing independently so one bad filing does not abort the run.
     Returns the number of patterns stored."""
     stored = 0
+    seen: set[str] = set()
     for ref in refs:
+        if ref.company.lower() in seen:  # one filing per company keeps the index diverse
+            continue
         try:
-            patterns = extract_patterns(ref, edgar.fetch_text(ref), llm)
+            patterns = extract_patterns(ref, edgar.fetch_text(ref), llm, excerpt_chars)
+            if not patterns:
+                log.info("no financing section found in %s (%s)", ref.company, ref.accession)
+                continue
+            vectors = embedder.embed_documents([pattern_text(p) for p in patterns])
         except (LLMError, httpx.HTTPError) as exc:
             log.warning("skipping %s (%s): %s", ref.company, ref.accession, exc)
             continue
-        if not patterns:
-            log.info("no financing section found in %s (%s)", ref.company, ref.accession)
-            continue
-        store.upsert(patterns, embedder.embed_documents([pattern_text(p) for p in patterns]))
+        store.upsert(patterns, vectors)
+        seen.add(ref.company.lower())
         stored += len(patterns)
         log.info("stored %d patterns from %s", len(patterns), ref.company)
     return stored

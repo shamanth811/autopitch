@@ -17,6 +17,10 @@ _ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{adsh}/{doc}"
 _MIN_INTERVAL = 0.12  # seconds between requests, i.e. under 10 req/s
 
 
+_ATTEMPTS = 4
+_RETRY_DELAY = 2.0
+
+
 class FilingRef(BaseModel):
     company: str
     cik: str
@@ -45,15 +49,22 @@ class EdgarClient:
             follow_redirects=True,
         )
         self._last = 0.0
+        self._sleep = time.sleep
 
     def _get(self, url: str, **params) -> httpx.Response:
         wait = _MIN_INTERVAL - (time.monotonic() - self._last)
         if wait > 0:
             time.sleep(wait)
-        resp = self._http.get(url, params=params or None)
-        self._last = time.monotonic()
-        resp.raise_for_status()
-        return resp
+        for attempt in range(1, _ATTEMPTS + 1):
+            resp = self._http.get(url, params=params or None)
+            self._last = time.monotonic()
+            # EDGAR answers 5xx and 429 under load; those are worth another try.
+            if (resp.status_code >= 500 or resp.status_code == 429) and attempt < _ATTEMPTS:
+                self._sleep(_RETRY_DELAY * 2 ** (attempt - 1))
+                continue
+            resp.raise_for_status()
+            return resp
+        raise AssertionError("unreachable")
 
     def search(
         self,

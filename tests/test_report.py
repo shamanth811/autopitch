@@ -1,8 +1,8 @@
 from autopitch.graph import build_graph
 from autopitch.llm.fake import FakeLLM
 from autopitch.objections import Objection, _Objections
-from autopitch.report import build_report, render_markdown
-from autopitch.schema import CriterionScore, Deck, Section, Slide
+from autopitch.report import Report, build_report, render_markdown
+from autopitch.schema import Composite, CriterionScore, Deck, Section, Slide
 from autopitch.scoring import CRITERIA
 from autopitch.scoring.nodes import _SectionJudgement
 
@@ -51,3 +51,25 @@ def test_report_round_trips_through_json(sample_deck):
     report = build_report(_run(sample_deck))
     again = type(report).model_validate_json(report.model_dump_json())
     assert again.composite.score == report.composite.score
+
+
+def test_markdown_shows_form_d_distribution_and_skips_empty_s1_section(sample_deck):
+    from autopitch.retrieval.benchmark import Benchmark
+    from autopitch.retrieval.formd import FormDStats
+
+    stats = FormDStats(
+        industries=["Other Energy"], peers=185, p25_usd=5e5, median_usd=2.9e6, p75_usd=1.5e7,
+        p90_usd=4.4e7, ask_percentile=52.0, period_start="2024-07-01", period_end="2026-06-30",
+    )  # fmt: skip
+    report = Report(
+        deck=sample_deck,
+        composite=Composite(score=6.0, weights={}, contributions={}),
+        sections=[],
+        weak_sections=[],
+        benchmark=Benchmark(formd=stats),
+    )
+    md = render_markdown(report)
+    assert "## Raise size against SEC Form D filings" in md
+    assert "185 private raises" in md and "52th percentile" in md
+    assert "size only" in md
+    assert "Similar companies in SEC S-1 filings" not in md

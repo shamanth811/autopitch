@@ -38,24 +38,68 @@ revenue to judge; Series A weights traction and financials.
 is dropped and the remaining weights renormalised, and the exclusion is reported. A model
 failure should not silently look like a bad startup.
 
-**Two models, chosen by role.** Gemini 2.5 Pro handles extraction and objections, which need
-long-context reading and synthesis. Llama 3.1 (any OpenAI-compatible host) handles the six
-narrow, parallel scoring calls. Both sit behind the `LLMClient` protocol, so either can be
+**Two model roles.** Extraction and objections need long-context reading and synthesis; the
+six scoring calls are narrow and parallel. Gemini 2.5 Pro can take the first role, and any
+OpenAI-compatible host (Groq by default) takes the second. Gemini is optional: without it the
+scoring model does both jobs. Both sit behind the `LLMClient` protocol, so either can be
 swapped, and tests use a deterministic fake.
 
-**Retrieval over SEC filings.** `scripts/ingest_filings.py` searches EDGAR full-text for S-1
-registration statements, locates the "Recent Sales of Unregistered Securities" section,
-extracts private financing rounds into typed `FundingPattern` records with an LLM, embeds
-them, and upserts to Pinecone. At analysis time the deck is embedded, comparable rounds are
-retrieved (filtered by sector, widening if there are too few), and the deck's raise is compared
-to the median same-stage round.
+**OCR fallback.** `read_slides` extracts text with pypdf. Pages that yield none are extracted
+into a small PDF and sent to Mistral OCR (`parsing/ocr.py`), which rotates across several API
+keys: a 429 or quota error cools a key down for 5 minutes, a rejected key for an hour, and only
+a malformed document fails immediately. If OCR fails but some pages had text, the deck is
+analysed from those; if nothing was readable, the API returns a generic 502.
 
-Limits of this benchmark: S-1 filers are companies that went on to file for an IPO, so the
-index has survivorship bias, and amounts come from LLM extraction of filing text. It indicates
-whether an ask is unusual for its stage; it is not a valuation.
+**Free-tier limits are a design input.** Scorer concurrency is capped (`SCORING_CONCURRENCY`),
+the Groq client retries 429s with backoff, the Voyage client paces its calls, and the ingest
+script sends a smaller filing excerpt when Gemini is not in use, so one request fits a
+tokens-per-minute cap.
 
-**Graceful degradation.** Without Pinecone credentials the benchmark node is skipped and the
-rest of the report is still produced.
+**Jobs, not long requests.** A full analysis takes about a minute, longer than many proxies
+allow. The web app posts to `/v1/jobs`, which returns at once; `JobRunner` runs the graph in a
+thread pool and streams it, writing the current stage to SQLite after each step. The UI polls
+that stage for real progress. Only the finished report is stored, never the PDF; rows are keyed
+by an anonymous per-browser owner id, expire after `RETENTION_DAYS`, and any job left running
+by a dead process is marked failed at startup. The synchronous `/v1/analyze` remains for scripts.
+
+**Swapping the database.** All persistence is in `storage.JobStore`. Moving to Postgres (for
+example Supabase) means reimplementing that one class. It would also be the point to add real
+authentication, replacing the owner id with a user id.
+
+**Two benchmark layers, because the two SEC sources answer different questions.**
+
+*Raise size: SEC Form D* (`retrieval/formd.py`, `scripts/ingest_formd.py`). Every US company
+that raises through a private placement files a Form D, and the SEC publishes quarterly bulk
+data sets. The ingest keeps equity raises by corporations and LLCs incorporated within five
+years, in industry groups that can be startups (real estate, pooled funds and the like are
+excluded), amounts between $25K and $5B, and only the latest of an amendment chain. Eight
+quarters give about 5,600 raises in a local SQLite file. At analysis time the deck's sector is
+mapped to Form D industry groups, and the report shows the quartiles of raise sizes and the
+percentile of the ask. There is no model, no embedding and no API key in this path, so it is
+fast, free and reproducible.
+
+*Similar companies: SEC S-1* (`scripts/ingest_filings.py`). It searches EDGAR full-text for S-1
+registration statements, locates the "Recent Sales of Unregistered Securities" section (and a
+few alternative headings), extracts private financing rounds into typed `FundingPattern`
+records with an LLM, embeds them (Voyage or Gemini) and upserts to Pinecone. Pattern ids are
+derived from the round (company, stage, amount, year) so amended filings overwrite instead of
+duplicating, and only one filing per company is ingested per run. At analysis time the deck is
+embedded and the nearest rounds are retrieved (filtered by sector, widening if there are too
+few). Matches below a similarity cutoff are dropped, one company can fill at most two slots, and
+a same-stage median is only quoted from three or more comparables.
+
+The extraction step assigns each deck a sector from a fixed vocabulary (`parsing/extract.py`),
+which both layers depend on; a test keeps that vocabulary in step with the Form D mapping.
+
+Limits. Form D has no stage and no description, so it says whether an ask is unusual in size,
+not whether the company resembles anyone; its industry groups are coarse, and the amount is
+"sold so far". The S-1 index covers only companies that filed for an IPO, so it has survivorship
+bias, amounts come from LLM extraction, and it is small. Neither is a valuation.
+
+**Graceful degradation.** Each benchmark layer is optional. Without Pinecone and an embedding
+key the similar-companies layer is skipped, without the Form D database the raise-size layer
+is skipped, and with neither the rest of the report is still produced. The Pinecone store also refuses to open an index
+whose dimension differs from the embedder's.
 
 ## Testing approach
 

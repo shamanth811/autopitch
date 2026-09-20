@@ -14,7 +14,15 @@ import sys
 from pathlib import Path
 
 from autopitch.config import get_settings
-from autopitch.factory import build_embedder, build_gemini, build_llama, build_store
+from autopitch.factory import (
+    build_embedder,
+    build_extraction_llm,
+    build_formd_store,
+    build_llama,
+    build_ocr,
+    build_store,
+    embedding_provider,
+)
 from autopitch.graph import build_graph
 from autopitch.parsing import read_slides
 from autopitch.report import build_report, render_markdown
@@ -29,25 +37,25 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     s = get_settings()
-    missing = [
-        name
-        for name, val in (("GEMINI_API_KEY", s.gemini_api_key), ("LLAMA_API_KEY", s.llama_api_key))
-        if not val
-    ]
+    missing = [name for name, val in (("LLAMA_API_KEY", s.llama_api_key),) if not val]
     if missing:
         print(f"Missing settings: {', '.join('AUTOPITCH_' + m for m in missing)}", file=sys.stderr)
         return 2
 
     logging.info("tracing: %s", "on" if configure_tracing(s) else "off")
     embedder = store = None
-    if s.pinecone_api_key:
+    if s.pinecone_api_key and embedding_provider(s):
         embedder, store = build_embedder(s), build_store(s)
     else:
-        logging.warning("no Pinecone key: skipping the benchmark step")
+        logging.warning("no Pinecone or embedding key: skipping the benchmark step")
 
-    slides = read_slides(args.deck.read_bytes(), max_pages=s.max_pages)
-    graph = build_graph(build_gemini(s), build_llama(s), embedder, store)
-    report = build_report(graph.invoke({"slides": slides}))
+    slides = read_slides(args.deck.read_bytes(), max_pages=s.max_pages, ocr=build_ocr(s))
+    graph = build_graph(
+        build_extraction_llm(s), build_llama(s), embedder, store, build_formd_store(s)
+    )
+    report = build_report(
+        graph.invoke({"slides": slides}, {"max_concurrency": s.scoring_concurrency})
+    )
 
     out = args.out or args.deck.with_suffix("")
     out.parent.mkdir(parents=True, exist_ok=True)

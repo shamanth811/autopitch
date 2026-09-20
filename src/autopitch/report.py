@@ -71,10 +71,35 @@ def render_markdown(r: Report) -> str:
         out.extend(f"- _Missing:_ {m}" for m in s.missing_data)
         out.append("")
 
-    if r.benchmark:
+    if r.benchmark and r.benchmark.formd:
+        f = r.benchmark.formd
+        out += ["## Raise size against SEC Form D filings", ""]
+        if f.median_usd is not None:
+            place = (
+                f" Ask of {_usd(d.financials.raise_amount_usd)} sits at the "
+                f"{f.ask_percentile:.0f}th percentile."
+                if f.ask_percentile is not None
+                else ""
+            )
+            out.append(
+                f"{f.peers:,} private raises by companies under five years old "
+                f"({', '.join(f.industries)}), filed {f.period_start} to {f.period_end}: "
+                f"25th percentile {_usd(f.p25_usd)}, median {_usd(f.median_usd)}, "
+                f"75th percentile {_usd(f.p75_usd)}, 90th percentile {_usd(f.p90_usd)}.{place}"
+            )
+            out.append("")
+        out.extend(f"- {flag}" for flag in f.flags)
+        out += [
+            "",
+            "_Form D lists the amount sold so far and has no funding stage, so this compares "
+            "size only, across all stages._",
+            "",
+        ]
+
+    if r.benchmark and (r.benchmark.comparables or r.benchmark.flags):
         b = r.benchmark
         out += [
-            "## Benchmark against SEC-derived funding rounds",
+            "## Similar companies in SEC S-1 filings",
             "",
             f"Comparables retrieved: {len(b.comparables)} | Same-stage with amount: "
             f"{b.stage_comparables} | Median raise: {_usd(b.median_raise_usd)} | "

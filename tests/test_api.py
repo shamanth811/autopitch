@@ -100,7 +100,7 @@ def test_rate_limit_returns_429_with_retry_after(sample_deck):
 
 def test_model_failure_is_502_without_leaking_details(sample_deck):
     class Broken:
-        def invoke(self, _):
+        def invoke(self, _, config=None):
             raise LLMError("api key sk-secret rejected by provider")
 
     client = TestClient(create_app(Settings(_env_file=None), lambda s: Broken()))
@@ -122,3 +122,35 @@ def test_rate_limiter_window_expires():
     assert limiter.check("b") == 0  # separate client
     now[0] = 10.1
     assert limiter.check("a") == 0
+
+
+def test_serves_built_frontend_without_shadowing_api(tmp_path):
+    (tmp_path / "index.html").write_text("<title>AutoPitch</title>")
+    app = create_app(Settings(frontend_dir=str(tmp_path)), graph_factory=lambda s: None)
+    client = TestClient(app)
+    assert "AutoPitch" in client.get("/").text
+    assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_groq_only_config_builds_a_graph():
+    from autopitch.api import _default_graph_factory
+
+    # No Gemini key needed; the Groq scoring key is what gates the service.
+    assert _default_graph_factory(Settings(_env_file=None, llama_api_key="k")) is not None
+    assert _default_graph_factory(Settings(_env_file=None, gemini_api_key="g")) is None
+
+
+def test_scoring_concurrency_is_applied(sample_deck):
+    seen = {}
+
+    class Spy:
+        def invoke(self, state, config=None):
+            seen["config"] = config
+            raise LLMError("stop here")
+
+    client = TestClient(
+        create_app(Settings(scoring_concurrency=3), graph_factory=lambda s: Spy()),
+        raise_server_exceptions=False,
+    )
+    _post(client, make_pdf(["x"]))
+    assert seen["config"] == {"max_concurrency": 3}

@@ -34,6 +34,13 @@ class PineconeStore:
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
             )
+        else:
+            existing = self._pc.describe_index(index_name).dimension
+            if existing != dim:
+                raise ValueError(
+                    f"Pinecone index '{index_name}' has dimension {existing} but the embedder "
+                    f"produces {dim}. Point AUTOPITCH_PINECONE_INDEX at a new index name."
+                )
         self._index = self._pc.Index(index_name)
 
     def upsert(self, patterns: list[FundingPattern], vectors: list[list[float]]) -> None:
