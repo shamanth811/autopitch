@@ -56,7 +56,11 @@ class EdgarClient:
         return resp
 
     def search(
-        self, query: str, forms: str = "S-1", start: str = "2015-01-01", end: str = "2025-12-31",
+        self,
+        query: str,
+        forms: str = "S-1",
+        start: str = "2015-01-01",
+        end: str = "2025-12-31",
         limit: int = 20,
     ) -> list[FilingRef]:
         data = self._get(

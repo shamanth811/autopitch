@@ -12,12 +12,19 @@ def _run(sample_deck):
         section = next(s for s in Section if f"Section under review: {s.value}" in prompt)
         score = 3 if section == Section.MOAT else 8
         return _SectionJudgement(
-            criteria=[CriterionScore(criterion=n, score=score, reasoning=f"{n} why") for n in CRITERIA[section]],
+            criteria=[
+                CriterionScore(criterion=n, score=score, reasoning=f"{n} why")
+                for n in CRITERIA[section]
+            ],
             summary=f"{section.value} summary",
         )
 
-    obj = Objection(section=Section.MOAT, question="What stops Enel X?", basis="moat 3",
-                    suggested_response="Forecast accuracy data")
+    obj = Objection(
+        section=Section.MOAT,
+        question="What stops Enel X?",
+        basis="moat 3",
+        suggested_response="Forecast accuracy data",
+    )
     graph = build_graph(
         FakeLLM({Deck: sample_deck, _Objections: _Objections(objections=[obj])}),
         FakeLLM({_SectionJudgement: judge}),

@@ -12,8 +12,12 @@ from autopitch.retrieval.ingest import (
 )
 
 REF = FilingRef(
-    company="Voltly Inc", cik="0001234567", accession="0001193125-21-000001",
-    document="d1s1.htm", form="S-1", filed="2021-05-03",
+    company="Voltly Inc",
+    cik="0001234567",
+    accession="0001193125-21-000001",
+    document="d1s1.htm",
+    form="S-1",
+    filed="2021-05-03",
 )
 
 FILING = """
@@ -56,8 +60,11 @@ def _llm():
                 sector="Climate",
                 rounds=[
                     _ExtractedRound(
-                        stage="series-a", round_amount_usd=8e6, year=2018,
-                        investors=["Fund One"], summary="Series A for grid software.",
+                        stage="series-a",
+                        round_amount_usd=8e6,
+                        year=2018,
+                        investors=["Fund One"],
+                        summary="Series A for grid software.",
                     )
                 ],
             )

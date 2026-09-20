@@ -29,7 +29,8 @@ class Match(BaseModel):
 def pattern_text(p: FundingPattern) -> str:
     """Text that gets embedded for a stored pattern."""
     amount = f"${p.round_amount_usd:,.0f}" if p.round_amount_usd else "undisclosed amount"
-    return f"{p.sector} company, {p.stage or 'unknown'} round, {amount}, {p.year or 'n/a'}. {p.summary}"
+    head = f"{p.sector} company, {p.stage or 'unknown'} round, {amount}, {p.year or 'n/a'}."
+    return f"{head} {p.summary}"
 
 
 def deck_query_text(deck: Deck) -> str:

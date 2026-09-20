@@ -43,19 +43,32 @@ def test_full_graph_with_retrieval_produces_benchmark_and_objections(sample_deck
     def judge(system, prompt):
         section = next(s for s in Section if f"Section under review: {s.value}" in prompt)
         return _SectionJudgement(
-            criteria=[CriterionScore(criterion=n, score=6, reasoning="ok") for n in CRITERIA[section]],
+            criteria=[
+                CriterionScore(criterion=n, score=6, reasoning="ok") for n in CRITERIA[section]
+            ],
             summary="fine",
         )
 
     emb, store = HashEmbedder(), InMemoryStore()
     pats = [
-        FundingPattern(id=f"p{i}", company=f"c{i}", sector="climate", stage="seed",
-                       round_amount_usd=2e6, year=2020, summary="grid software")
+        FundingPattern(
+            id=f"p{i}",
+            company=f"c{i}",
+            sector="climate",
+            stage="seed",
+            round_amount_usd=2e6,
+            year=2020,
+            summary="grid software",
+        )
         for i in range(3)
     ]
     store.upsert(pats, emb.embed_documents([pattern_text(p) for p in pats]))
-    objection = Objection(section=Section.MOAT, question="Why can't Enel X copy this?",
-                          basis="moat 6", suggested_response="Show forecast accuracy data")
+    objection = Objection(
+        section=Section.MOAT,
+        question="Why can't Enel X copy this?",
+        basis="moat 6",
+        suggested_response="Show forecast accuracy data",
+    )
     graph = build_graph(
         FakeLLM({Deck: sample_deck, _Objections: _Objections(objections=[objection])}),
         FakeLLM({_SectionJudgement: judge}),

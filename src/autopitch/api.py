@@ -22,6 +22,7 @@ from autopitch.llm import LLMError
 from autopitch.parsing import DeckParseError, read_slides
 from autopitch.ratelimit import RateLimiter
 from autopitch.report import Report, build_report, render_markdown
+from autopitch.tracing import configure_tracing
 
 log = logging.getLogger("autopitch.api")
 
@@ -46,6 +47,8 @@ def create_app(
     graph_factory: Callable[[Settings], object] = _default_graph_factory,
 ) -> FastAPI:
     settings = settings or get_settings()
+    if configure_tracing(settings):
+        log.info("LangSmith tracing enabled, project=%s", settings.langsmith_project)
     app = FastAPI(title="AutoPitch", version="0.1.0")
     limiter = RateLimiter(settings.rate_limit_per_minute)
     state: dict[str, object] = {}

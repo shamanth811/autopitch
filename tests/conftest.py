@@ -8,8 +8,8 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from autopitch.schema import (
     Deck,
-    Founder,
     FinancialsSection,
+    Founder,
     MarketSection,
     MoatSection,
     ProblemSection,

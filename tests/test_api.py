@@ -18,7 +18,9 @@ def _graph(sample_deck):
     def judge(system, prompt):
         section = next(s for s in Section if f"Section under review: {s.value}" in prompt)
         return _SectionJudgement(
-            criteria=[CriterionScore(criterion=n, score=7, reasoning="ok") for n in CRITERIA[section]],
+            criteria=[
+                CriterionScore(criterion=n, score=7, reasoning="ok") for n in CRITERIA[section]
+            ],
             summary="fine",
         )
 

@@ -9,8 +9,13 @@ from autopitch.retrieval import (
 
 def _pattern(id_: str, sector: str, summary: str, amount: float = 5e6) -> FundingPattern:
     return FundingPattern(
-        id=id_, company=id_, sector=sector, stage="seed", round_amount_usd=amount,
-        year=2021, summary=summary,
+        id=id_,
+        company=id_,
+        sector=sector,
+        stage="seed",
+        round_amount_usd=amount,
+        year=2021,
+        summary=summary,
     )
 
 
