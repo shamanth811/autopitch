@@ -2,6 +2,7 @@ import pytest
 
 from autopitch.graph import build_graph
 from autopitch.llm.fake import FakeLLM
+from autopitch.objections import _Objections
 from autopitch.schema import CriterionScore, Deck, Section, SectionScore, Slide
 from autopitch.scoring import CRITERIA
 from autopitch.scoring.aggregate import compose
@@ -52,7 +53,8 @@ def test_graph_runs_all_six_scorers_and_composes(sample_deck):
             summary="solid",
         )
 
-    graph = build_graph(FakeLLM({Deck: sample_deck}), FakeLLM({_SectionJudgement: judge}))
+    extraction = FakeLLM({Deck: sample_deck, _Objections: _Objections(objections=[])})
+    graph = build_graph(extraction, FakeLLM({_SectionJudgement: judge}))
     out = graph.invoke({"slides": [Slide(number=1, text="Acme Grid")]})
 
     assert {s.section for s in out["scores"]} == set(Section)
