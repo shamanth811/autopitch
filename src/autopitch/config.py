@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     langsmith_project: str = "autopitch"
 
     max_upload_mb: int = 25
+    max_pages: int = 60
+
+    # Optional shared secret. When set, every /v1 request must send it as X-API-Key.
+    api_key: str = ""
+    rate_limit_per_minute: int = 10
 
 
 @lru_cache

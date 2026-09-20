@@ -14,10 +14,16 @@ class DeckParseError(ValueError):
     pass
 
 
-def read_slides(data: bytes) -> list[Slide]:
-    """Extract text page by page. Each PDF page is treated as one slide."""
+def read_slides(data: bytes, max_pages: int | None = None) -> list[Slide]:
+    """Extract text page by page. Each PDF page is treated as one slide.
+
+    `max_pages` is checked before any text extraction so an oversized upload is rejected
+    cheaply.
+    """
     try:
         reader = PdfReader(io.BytesIO(data))
+        if max_pages is not None and len(reader.pages) > max_pages:
+            raise DeckParseError(f"Deck has {len(reader.pages)} pages; the limit is {max_pages}.")
         pages = [(page.extract_text() or "").strip() for page in reader.pages]
     except (PdfReadError, ValueError) as exc:
         raise DeckParseError(f"Could not read PDF: {exc}") from exc
