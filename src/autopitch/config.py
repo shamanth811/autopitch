@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
 
+    # SEC requires a User-Agent naming the requester, e.g. "Jane Doe jane@example.com"
+    sec_user_agent: str = ""
+
+    langsmith_api_key: str = ""
+    langsmith_project: str = "autopitch"
+
     max_upload_mb: int = 25
 
 
