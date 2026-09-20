@@ -100,7 +100,19 @@ class SectionScore(BaseModel):
     missing_data: list[str] = Field(default_factory=list)
 
 
+class TraceLine(BaseModel):
+    """One criterion's path into the composite score."""
+
+    section: Section
+    criterion: str
+    score: float
+    effective_weight: float = Field(description="Section weight split across its criteria")
+    reasoning: str
+
+
 class Composite(BaseModel):
     score: float = Field(ge=0, le=10)
     weights: dict[Section, float]
     contributions: dict[Section, float]
+    excluded: list[Section] = Field(default_factory=list)
+    trace: list[TraceLine] = Field(default_factory=list)
