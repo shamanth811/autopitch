@@ -42,11 +42,12 @@ def build_graph(
     embedder: Embedder | None = None,
     store: VectorStore | None = None,
     formd_store: FormDStore | None = None,
+    classify_sector: bool = False,
 ):
     def parse(state: PitchState) -> PitchState:
         if "deck" in state:  # caller already has a structured deck
             return {}
-        return {"deck": extract_deck(state["slides"], extraction_llm)}
+        return {"deck": extract_deck(state["slides"], extraction_llm, classify_sector)}
 
     def make_scorer(section: Section):
         def scorer(state: PitchState) -> PitchState:

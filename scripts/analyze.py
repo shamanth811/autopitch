@@ -51,7 +51,12 @@ def main() -> int:
 
     slides = read_slides(args.deck.read_bytes(), max_pages=s.max_pages, ocr=build_ocr(s))
     graph = build_graph(
-        build_extraction_llm(s), build_llama(s), embedder, store, build_formd_store(s)
+        build_extraction_llm(s),
+        build_llama(s),
+        embedder,
+        store,
+        build_formd_store(s),
+        s.sector_classifier,
     )
     report = build_report(
         graph.invoke({"slides": slides}, {"max_concurrency": s.scoring_concurrency})

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { cap, pct, usd, words } from "./format";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { cap, pct, TONE_LABEL, tone, usd, words } from "./format";
 import type { FormDStats, Report, SectionScore } from "./types";
 
 function download(report: Report) {
@@ -59,20 +60,38 @@ function RaiseRange({ f, ask }: { f: FormDStats; ask: number | null }) {
           <span style={{ left: `${Math.min(99, Math.max(1, f.ask_percentile))}%` }} />
         </div>
       )}
+      {f.ask_percentile !== null && (
+        <div className="pct-ticks muted" aria-hidden>
+          <span>Smallest raises</span>
+          <span>Median</span>
+          <span>Largest raises</span>
+        </div>
+      )}
     </div>
   );
 }
 
-function SectionRow({ s, weight, weak }: { s: SectionScore; weight?: number; weak: boolean }) {
+function SectionRow({
+  s,
+  weight,
+  weak,
+  open,
+}: {
+  s: SectionScore;
+  weight?: number;
+  weak: boolean;
+  open: boolean;
+}) {
+  const t = tone(s.score, weak);
   return (
-    <details className="section">
+    <details className="section" open={open}>
       <summary>
         <span className="sec-name">
           {cap(s.section)}
-          {weak && <span className="tag">Weak</span>}
+          <span className={`tag ${t}`}>{TONE_LABEL[t]}</span>
         </span>
         <span className="bar" aria-hidden>
-          <span style={{ width: `${s.score * 10}%` }} />
+          <span className={t} style={{ width: `${s.score * 10}%` }} />
         </span>
         <span className="sec-score">{s.score.toFixed(1)}</span>
         <span className="muted sec-weight">{weight === undefined ? "excluded" : pct(weight)}</span>
@@ -81,8 +100,7 @@ function SectionRow({ s, weight, weak }: { s: SectionScore; weight?: number; wea
       <ul className="criteria">
         {s.criteria.map((c) => (
           <li key={c.criterion}>
-            <strong>{words(c.criterion)}</strong>{" "}
-            <span className="muted">{c.score}/10</span>
+            <strong>{words(c.criterion)}</strong> <span className="muted">{c.score}/10</span>
             <p className="serif">{c.reasoning}</p>
           </li>
         ))}
@@ -96,11 +114,62 @@ function SectionRow({ s, weight, weak }: { s: SectionScore; weight?: number; wea
   );
 }
 
+function Verdict({ r }: { r: Report }) {
+  const ranked = [...r.sections].sort((a, b) => a.score - b.score);
+  const weakest = ranked.slice(0, 2);
+  const best = ranked[ranked.length - 1];
+  const pctile = r.benchmark?.formd?.ask_percentile;
+  const top = r.objections[0];
+  if (!best) return null;
+  return (
+    <section className="verdict" aria-label="Summary">
+      <div>
+        <p className="eyebrow">Strongest</p>
+        <p className="v-main">
+          {cap(best.section)} <span className="muted">{best.score.toFixed(1)}</span>
+        </p>
+      </div>
+      <div>
+        <p className="eyebrow">Fix first</p>
+        <p className="v-main">
+          {weakest.map((w) => `${cap(w.section)} ${w.score.toFixed(1)}`).join(" · ")}
+        </p>
+      </div>
+      {pctile !== null && pctile !== undefined && (
+        <div>
+          <p className="eyebrow">Your ask</p>
+          <p className="v-main">Larger than {Math.round(pctile)}% of raises</p>
+        </div>
+      )}
+      {top && (
+        <div className="v-wide">
+          <p className="eyebrow">Expect this question</p>
+          <p className="v-main serif">{top.question}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ReportView({ report: r, onDelete }: { report: Report; onDelete: () => void }) {
   const b = r.benchmark;
   const [confirming, setConfirming] = useState(false);
+  // null = each section follows its default (weak ones open); boolean = user override.
+  const [openAll, setOpenAll] = useState<boolean | null>(null);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const on = () => setPrinting(true);
+    const off = () => setPrinting(false);
+    window.addEventListener("beforeprint", on);
+    window.addEventListener("afterprint", off);
+    return () => {
+      window.removeEventListener("beforeprint", on);
+      window.removeEventListener("afterprint", off);
+    };
+  }, []);
+  const overall = tone(r.composite.score);
   return (
-    <article className="report">
+    <article className={`report${printing ? " printing" : ""}`}>
       <p className="eyebrow">
         {r.deck.sector} · {r.deck.stage ?? "stage unknown"}
       </p>
@@ -108,8 +177,9 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
       {r.deck.one_liner && <p className="lead">{r.deck.one_liner}</p>}
 
       <div className="composite">
-        <span className="big">{r.composite.score.toFixed(1)}</span>
+        <span className={`big ${overall}`}>{r.composite.score.toFixed(1)}</span>
         <span className="muted">/ 10 composite</span>
+        <span className={`tag ${overall}`}>{TONE_LABEL[overall]}</span>
       </div>
       {r.composite.excluded.length > 0 && (
         <p className="muted">
@@ -127,27 +197,27 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
         <button className="btn outline" onClick={() => window.print()}>
           Print / save PDF
         </button>
-        {confirming ? (
-          <>
-            <button className="btn outline danger" onClick={onDelete}>
-              Confirm delete
-            </button>
-            <button className="btn outline" onClick={() => setConfirming(false)}>
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button className="btn outline" onClick={() => setConfirming(true)}>
-            Delete report
-          </button>
-        )}
+        <button className="btn outline" onClick={() => setConfirming(true)}>
+          Delete report
+        </button>
       </div>
 
-      <h2>Section scores</h2>
+      <Verdict r={r} />
+
+      <h2 className="h2-row">
+        Section scores
+        <button
+          className="link-btn noprint"
+          onClick={() => setOpenAll(openAll === true ? false : true)}
+        >
+          {openAll === true ? "Collapse all" : "Expand all"}
+        </button>
+      </h2>
       <div className="sections">
         {r.sections.map((s) => (
           <SectionRow
-            key={s.section}
+            key={`${s.section}-${openAll}`}
+            open={printing || (openAll ?? r.weak_sections.includes(s.section))}
             s={s}
             weight={r.composite.weights[s.section]}
             weak={r.weak_sections.includes(s.section)}
@@ -161,8 +231,8 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
           {b.formd.median_usd !== null ? (
             <>
               <p className="serif">
-                {b.formd.peers.toLocaleString()} private raises by companies under five years old
-                in {b.formd.industries.join(", ")}, filed {b.formd.period_start} to{" "}
+                {b.formd.peers.toLocaleString()} private raises by companies under five years old in{" "}
+                {b.formd.industries.join(", ")}, filed {b.formd.period_start} to{" "}
                 {b.formd.period_end}.
               </p>
               <RaiseRange f={b.formd} ask={r.deck.financials.raise_amount_usd} />
@@ -199,14 +269,14 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
             </p>
           ))}
           <div className="table-wrap">
-            <table>
+            <table className="stack">
               <thead>
                 <tr>
                   <th>Company</th>
                   <th>Stage</th>
                   <th className="num">Amount</th>
                   <th className="num">Year</th>
-                  <th className="num">Match</th>
+                  <th className="num">Similarity</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,10 +293,19 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
                           m.pattern.company
                         )}
                       </td>
-                      <td>{m.pattern.stage ?? "n/a"}</td>
-                      <td className="num">{usd(m.pattern.round_amount_usd)}</td>
-                      <td className="num">{m.pattern.year ?? "n/a"}</td>
-                      <td className="num">{m.similarity.toFixed(2)}</td>
+                      <td data-label="Stage">{m.pattern.stage ?? "n/a"}</td>
+                      <td className="num" data-label="Amount">
+                        {usd(m.pattern.round_amount_usd)}
+                      </td>
+                      <td className="num" data-label="Year">
+                        {m.pattern.year ?? "n/a"}
+                      </td>
+                      <td className="num" data-label="Similarity">
+                        <span className="sim" aria-hidden>
+                          <span style={{ width: `${Math.round(m.similarity * 100)}%` }} />
+                        </span>{" "}
+                        {Math.round(m.similarity * 100)}%
+                      </td>
                     </tr>
                   );
                 })}
@@ -256,7 +335,7 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
         </>
       )}
 
-      <details className="trace">
+      <details className="trace" open={printing}>
         <summary>Reasoning trace ({r.composite.trace.length} criteria)</summary>
         <div className="table-wrap">
           <table>
@@ -283,6 +362,15 @@ export function ReportView({ report: r, onDelete }: { report: Report; onDelete: 
       </details>
 
       <p className="muted disclaimer">{r.disclaimer}</p>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Delete this report?"
+        body="The report is removed from this browser's list and from the server. This cannot be undone."
+        confirmLabel="Delete report"
+        onConfirm={onDelete}
+        onCancel={() => setConfirming(false)}
+      />
     </article>
   );
 }

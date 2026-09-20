@@ -46,4 +46,6 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # Prose lives in these files (rubric questions, sample filing text); wrapping hurts readability.
 "src/autopitch/scoring/rubric.py" = ["E501"]
+"src/autopitch/parsing/sector.py" = ["E501"]
+"scripts/eval_sector.py" = ["E501"]
 "tests/test_ingest.py" = ["E501"]

@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     ocr_enabled: bool = True
     ocr_model: str = "mistral-ocr-latest"
 
+    # Classify the sector in its own model call. Off by default: in a 20-deck check it was
+    # not more accurate than the extraction call's own guess and cost ~1k tokens per analysis.
+    sector_classifier: bool = False
+
     max_upload_mb: int = 25
     max_pages: int = 60
 

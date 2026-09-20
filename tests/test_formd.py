@@ -268,7 +268,7 @@ def test_graph_skips_the_benchmark_with_no_sources(sample_deck):
 
 
 def test_every_extractor_sector_label_is_recognised_by_the_benchmark():
-    from autopitch.parsing.extract import SECTORS
+    from autopitch.parsing.sector import SECTORS
 
     for label in SECTORS:
         _, recognised = industries_for(label)
@@ -276,7 +276,8 @@ def test_every_extractor_sector_label_is_recognised_by_the_benchmark():
 
 
 def test_extraction_prompt_lists_the_sector_vocabulary():
-    from autopitch.parsing.extract import _SYSTEM, SECTORS
+    from autopitch.parsing.extract import _SYSTEM
+    from autopitch.parsing.sector import SECTORS
 
     assert all(label in _SYSTEM for label in SECTORS)
 

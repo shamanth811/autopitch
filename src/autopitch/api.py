@@ -64,6 +64,7 @@ def _default_graph_factory(settings: Settings):
         embedder,
         store,
         build_formd_store(settings),
+        settings.sector_classifier,
     )
 
 

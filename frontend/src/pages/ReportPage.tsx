@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, deleteJob, getJob } from "../api";
+import { DeckPreview, forgetDeck, getDeck } from "../deckPreview";
 import { ReportView } from "../ReportView";
 import type { Job, Stage } from "../types";
 import { useTitle } from "../useTitle";
@@ -15,20 +16,64 @@ const STEPS: { stage: Stage; label: string }[] = [
 ];
 
 function Progress({ job }: { job: Job }) {
-  const current = STEPS.findIndex((s) => s.stage === job.stage);
+  const current = Math.max(
+    0,
+    STEPS.findIndex((s) => s.stage === job.stage),
+  );
+  const started = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(
+      () => setElapsed(Math.floor((Date.now() - started.current) / 1000)),
+      1000,
+    );
+    return () => clearInterval(t);
+  }, []);
+  const slow = elapsed > 90;
   return (
     <>
-      <p className="eyebrow">Analyzing</p>
+      <p className="eyebrow">Analyzing · {elapsed}s</p>
       <h1>{job.filename}</h1>
-      <p className="lead">This takes about a minute. You can leave this page; the report will be in My reports.</p>
+      <p className="lead">
+        {slow
+          ? "This is taking longer than usual, often because the model provider is busy or the deck is long. It is still running."
+          : "This takes about a minute. You can leave this page; the report will be in My reports."}
+      </p>
+      <div
+        className="meter"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={STEPS.length}
+        aria-valuenow={current}
+        aria-label="Analysis progress"
+      >
+        <span style={{ width: `${(current / STEPS.length) * 100}%` }} />
+      </div>
       <ol className="steps" aria-live="polite">
         {STEPS.map((s, i) => (
           <li key={s.stage} className={i < current ? "done" : i === current ? "now" : ""}>
+            <span className="step-mark" aria-hidden>
+              {i < current ? "✓" : i === current ? "●" : "○"}
+            </span>
             {s.label}
+            <span className="visually-hidden">
+              {i < current ? " (done)" : i === current ? " (in progress)" : " (waiting)"}
+            </span>
           </li>
         ))}
       </ol>
     </>
+  );
+}
+
+function ReportSkeleton() {
+  return (
+    <div className="skeleton" aria-busy="true" aria-label="Loading report">
+      <span className="sk sk-eyebrow" />
+      <span className="sk sk-title" />
+      <span className="sk sk-line" />
+      <span className="sk sk-line short" />
+    </div>
   );
 }
 
@@ -70,6 +115,7 @@ export function ReportPage() {
 
   async function remove() {
     await deleteJob(id);
+    forgetDeck(id);
     navigate("/reports");
   }
 
@@ -90,34 +136,49 @@ export function ReportPage() {
     );
   }
 
+  const deck = getDeck(id);
   return (
-    <div className="container">
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {!job && !error && <p className="muted">Loading…</p>}
-      {job && (job.status === "queued" || job.status === "running") && <Progress job={job} />}
-      {job?.status === "failed" && (
-        <div className="narrow">
-          <p className="eyebrow">Analysis failed</p>
-          <h1>{job.filename}</h1>
+    <div className={`container${deck ? " with-preview" : ""}`}>
+      <div className="main-col">
+        {error && (
           <p className="error" role="alert">
-            {job.error ?? "The analysis failed."}
+            {error}
           </p>
-          <div className="row">
-            <Link to="/analyze" className="btn primary">
-              Try again
-            </Link>
-            <button className="btn outline" onClick={remove}>
-              Remove
-            </button>
+        )}
+        {!job && !error && <ReportSkeleton />}
+        {job && (job.status === "queued" || job.status === "running") && <Progress job={job} />}
+        {job?.status === "failed" && (
+          <div className="narrow">
+            <p className="eyebrow">Analysis failed</p>
+            <h1>{job.filename}</h1>
+            <p className="error" role="alert">
+              We couldn&apos;t finish analyzing this deck. Check that the PDF has selectable text
+              and try again.
+            </p>
+            {job.error && (
+              <details className="advanced">
+                <summary>Technical detail</summary>
+                <p className="muted wrap">{job.error}</p>
+              </details>
+            )}
+            <div className="row">
+              <Link to="/analyze" className="btn primary">
+                Try again
+              </Link>
+              <button className="btn outline" onClick={remove}>
+                Remove
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-      {job?.status === "done" && job.report && (
-        <ReportView report={job.report} onDelete={remove} />
+        )}
+        {job?.status === "done" && job.report && (
+          <ReportView report={job.report} onDelete={remove} />
+        )}
+      </div>
+      {deck && (
+        <aside className="side" aria-label="Deck preview">
+          <DeckPreview file={deck} />
+        </aside>
       )}
     </div>
   );

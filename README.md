@@ -103,6 +103,12 @@ user agent, downloads about 3 MB per quarter, loads a local SQLite file):
 python scripts/ingest_formd.py --quarters 8
 ```
 
+Check sector-classification accuracy and stability against a labelled set (uses model tokens):
+
+```bash
+python scripts/eval_sector.py --repeats 2
+```
+
 Build the similar-companies index from S-1 filings (needs an embedding key, Pinecone and a
 SEC-compliant user agent):
 
@@ -132,6 +138,9 @@ All settings are environment variables prefixed `AUTOPITCH_`; see
   the report is still produced.
 - **OCR.** `MISTRAL_API_KEYS` (comma-separated, used in rotation with per-key cooldowns),
   `OCR_ENABLED`, `OCR_MODEL`. Only pages with no selectable text are sent.
+- **Sector.** The deck's sector drives both benchmark layers. `SECTOR_CLASSIFIER=true` adds a
+  dedicated model call to classify it (off by default; see `docs/ARCHITECTURE.md` for the
+  measurement). Without it the extraction call's guess is validated against a fixed vocabulary.
 - **Saved reports.** `DB_PATH` (SQLite file), `RETENTION_DAYS` (default 30, 0 keeps forever).
 - **Deployment.** `FRONTEND_DIR` serves the built UI. `TRUST_PROXY_HEADERS` makes the rate
   limiter use the last `X-Forwarded-For` entry; enable it only behind a proxy you control.

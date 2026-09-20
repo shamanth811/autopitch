@@ -88,8 +88,23 @@ embedded and the nearest rounds are retrieved (filtered by sector, widening if t
 few). Matches below a similarity cutoff are dropped, one company can fill at most two slots, and
 a same-stage median is only quoted from three or more comparables.
 
-The extraction step assigns each deck a sector from a fixed vocabulary (`parsing/extract.py`),
-which both layers depend on; a test keeps that vocabulary in step with the Form D mapping.
+Both layers depend on the deck's sector, and sector is a judgement rather than a copied field.
+Left as free text it was unstable (the same deck came back as "climate", "energy" and
+"unknown"), so the extraction prompt now lists a fixed 14-label vocabulary
+(`parsing/sector.py`), and `resolve_sector` validates whatever comes back: a label outside the
+list is never passed through, and a deterministic keyword scorer (which declines to answer on
+weak or tied evidence) fills in. Tests keep the vocabulary, definitions, keyword table and Form D
+mapping in step.
+
+There is also an optional dedicated classification call (`SECTOR_CLASSIFIER=true`): a small
+prompt with a definition and tie-break rule per label, a reasoning field before the answer, and
+an output type that cannot hold a label outside the list. It is off by default because it was
+not measurably better. `scripts/eval_sector.py` compares the two on 20 hand-labelled decks; on
+`gpt-oss-20b` the extraction call's own guess scored 90% strict, 100% benchmark-equivalent and
+was identical across repeated runs, while the dedicated call scored 92%, 100% and 95%
+(one deck flipped between `ai` and `saas`). The set is small, written by the classifier's
+author and easy, so it is a regression check rather than an accuracy claim, and it may look
+different on murkier real decks or a different model.
 
 Limits. Form D has no stage and no description, so it says whether an ask is unusual in size,
 not whether the company resembles anyone; its industry groups are coarse, and the amount is

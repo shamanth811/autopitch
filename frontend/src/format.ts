@@ -14,3 +14,9 @@ export const when = (iso: string): string =>
   new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 export const words = (s: string): string => s.replace(/[_-]/g, " ");
+
+export type Tone = "weak" | "mid" | "strong";
+/** Colour is never the only signal: pair every tone with a text label. */
+export const tone = (score: number, weak = false): Tone =>
+  weak || score < 5 ? "weak" : score >= 7 ? "strong" : "mid";
+export const TONE_LABEL: Record<Tone, string> = { weak: "Weak", mid: "Mixed", strong: "Strong" };

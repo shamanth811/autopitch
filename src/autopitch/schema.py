@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Section(StrEnum):
@@ -16,24 +16,37 @@ class Section(StrEnum):
     FINANCIALS = "financials"
 
 
+class _NullTolerant(BaseModel):
+    """Extraction models often answer null for a field the deck does not state, including
+    fields that are plain strings or lists. Treat null as absent so the default applies,
+    instead of failing validation and burning a retry."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_nulls(cls, data):
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v is not None}
+        return data
+
+
 class Slide(BaseModel):
     number: int = Field(ge=1)
     text: str
 
 
-class Founder(BaseModel):
+class Founder(_NullTolerant):
     name: str
     role: str | None = None
     background: str | None = None
 
 
-class ProblemSection(BaseModel):
+class ProblemSection(_NullTolerant):
     statement: str = ""
     target_customer: str | None = None
     evidence: list[str] = Field(default_factory=list)
 
 
-class MarketSection(BaseModel):
+class MarketSection(_NullTolerant):
     tam_usd: float | None = Field(default=None, description="Total addressable market in USD")
     sam_usd: float | None = None
     som_usd: float | None = None
@@ -41,7 +54,7 @@ class MarketSection(BaseModel):
     sources: list[str] = Field(default_factory=list)
 
 
-class TractionSection(BaseModel):
+class TractionSection(_NullTolerant):
     arr_usd: float | None = None
     mrr_usd: float | None = None
     monthly_growth_pct: float | None = None
@@ -50,19 +63,19 @@ class TractionSection(BaseModel):
     highlights: list[str] = Field(default_factory=list)
 
 
-class TeamSection(BaseModel):
+class TeamSection(_NullTolerant):
     founders: list[Founder] = Field(default_factory=list)
     headcount: int | None = None
     key_hires: list[str] = Field(default_factory=list)
 
 
-class MoatSection(BaseModel):
+class MoatSection(_NullTolerant):
     claims: list[str] = Field(default_factory=list)
     competitors: list[str] = Field(default_factory=list)
     defensibility: str | None = None
 
 
-class FinancialsSection(BaseModel):
+class FinancialsSection(_NullTolerant):
     raise_amount_usd: float | None = None
     valuation_usd: float | None = None
     burn_usd_monthly: float | None = None
@@ -71,7 +84,7 @@ class FinancialsSection(BaseModel):
     use_of_funds: list[str] = Field(default_factory=list)
 
 
-class Deck(BaseModel):
+class Deck(_NullTolerant):
     """A pitch deck after structured extraction."""
 
     company: str
