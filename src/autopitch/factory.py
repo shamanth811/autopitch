@@ -6,15 +6,18 @@ from autopitch.config import Settings
 from autopitch.llm import LLMClient
 from autopitch.llm.gemini import GeminiClient
 from autopitch.llm.llama import LlamaClient
+from autopitch.llm.retry import RetryingLLM
 from autopitch.retrieval import Embedder, GeminiEmbedder, PineconeStore, VectorStore
 
 
 def build_gemini(s: Settings) -> LLMClient:
-    return GeminiClient(api_key=s.gemini_api_key, model=s.gemini_model)
+    return RetryingLLM(GeminiClient(api_key=s.gemini_api_key, model=s.gemini_model))
 
 
 def build_llama(s: Settings) -> LLMClient:
-    return LlamaClient(base_url=s.llama_base_url, api_key=s.llama_api_key, model=s.llama_model)
+    return RetryingLLM(
+        LlamaClient(base_url=s.llama_base_url, api_key=s.llama_api_key, model=s.llama_model)
+    )
 
 
 def build_embedder(s: Settings) -> Embedder:
